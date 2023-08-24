@@ -1,0 +1,122 @@
+version: '3.8'
+services:
+ appmongosba:
+  build: ./mongoDBDocker
+  container_name: appmongosba
+  networks:
+     - appnet
+  ports:
+     - 27017:27017
+  tty:
+    true
+  restart:
+     unless-stopped
+ crud-server-app:
+  build: ./crud_server
+  container_name: crud-server-app
+  networks:
+     - appnet
+  ports:
+   - 2002:2000
+  stdin_open: true
+  tty: true
+  restart:
+     unless-stopped
+  links:
+      - appmongosba
+  depends_on:
+      - appmongosba
+  environment:
+      WAIT_HOSTS: appmongosba:27017
+ log-server-app:
+  build: ./server
+  container_name: log-server-app
+  networks:
+     - appnet
+  ports:
+   - 2003:2000
+  stdin_open: true
+  tty: true
+  restart:
+     unless-stopped
+  links:
+      - appmongosba
+  depends_on:
+      - appmongosba
+  environment:
+      WAIT_HOSTS: appmongosba:27017
+ mongo-express:
+    image: mongo-express
+    container_name: mongo-express
+    networks:
+     - appnet
+    ports:
+      - 8083:8081
+    environment:
+      - ME_CONFIG_MONGODB_ADMINUSERNAME=ahana100
+      - ME_CONFIG_MONGODB_ADMINPASSWORD=admin
+      - ME_CONFIG_MONGODB_SERVER=appmongosba
+    tty: true
+    restart:
+     unless-stopped
+    depends_on:
+      - appmongosba
+ uiapp:
+    build: ./ui
+    container_name: uiapp
+    networks:
+      - appnet
+    ports:
+      - 3001:3000
+    stdin_open: true
+    tty: true
+    restart:
+      unless-stopped
+    links:
+      - log-server-app
+      - crud-server-app
+    depends_on:
+      - crud-server-app
+      - log-server-app
+  # -------------------------------------
+  # Docker Infrastructure Visualization-1
+  # -------------------------------------
+ weave-scope:
+    image: weaveworks/scope:1.13.1
+    container_name: weave-scope
+    hostname: weave-scope
+    pid: "host"
+    privileged: true
+    ports:
+      - "4040:4040"
+    expose:
+      - "4040"
+    labels:
+      - "works.weave.role=system"
+    volumes:
+      - "/var/run/docker.sock:/var/run/docker.sock:rw"
+    command:
+      - "--probe.docker"
+      - "true"
+    networks:
+      - appnet
+  # -------------------------------------
+  # Docker Infrastructure Visualization-2
+  # -------------------------------------  
+ cadvisor:
+    container_name: cadvisor
+    image: google/cadvisor
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:rw
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+    ports:
+      - "8200:8080"
+    networks:
+      - appnet
+
+networks:
+  appnet:
+    name: appnet
+    driver: bridge
